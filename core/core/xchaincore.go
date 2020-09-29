@@ -116,6 +116,8 @@ type XChainCore struct {
 	blockBroadcaseMode uint8
 	// group chain involved
 	groupChain GroupChainRegister
+
+	blockFilter bool
 }
 
 // Status return the status of the chain
@@ -301,6 +303,8 @@ func (xc *XChainCore) Init(bcname string, xlog log.Logger, cfg *config.NodeConfi
 	xc.Utxovm.RegisterVAT("Propose", xc.proposal, nil)
 	xc.Utxovm.RegisterVAT("consensus", xc.con, xc.con.GetVATWhiteList())
 	xc.Utxovm.RegisterVAT("kernel", ker, ker.GetVATWhiteList())
+
+	xc.blockFilter = cfg.BlockFilter
 
 	go xc.Speed.ShowLoop(xc.log)
 	go xc.repostOfflineTx()
@@ -626,6 +630,10 @@ func (xc *XChainCore) doMiner() {
 	for _, vatTx := range txs {
 		accumulatedTxSize += proto.Size(vatTx)
 	}
+
+	//自动生成的交易的数量
+	txslen := len(txs)
+
 	txsUnconf, err := xc.Utxovm.GetUnconfirmedTx(false)
 	if err != nil {
 		xc.log.Warn("[Minning] fail to get unconfirmedtx")
@@ -654,6 +662,17 @@ func (xc *XChainCore) doMiner() {
 		}
 	}
 	minerTimer.Mark("PrePlay")
+
+	//判断是否启用区块过滤
+	if xc.blockFilter {
+		//判断是否有新交易数据
+		if txslen == len(txs) {
+			xc.log.Warn("miner block fail, the txs only auto tx")
+			return
+		}
+		xc.log.Info("miner block pass", "old txslen", txslen, "new txslen", len(txs))
+	}
+
 	//3. 统一在最后插入矿工奖励
 	blockAward := xc.Ledger.GenesisBlock.CalcAward(xc.Ledger.GetMeta().TrunkHeight + 1)
 	awardtx, err := xc.Utxovm.GenerateAwardTx(xc.address, blockAward.String(), []byte{'1'})

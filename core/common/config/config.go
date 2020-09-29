@@ -284,6 +284,8 @@ type NodeConfig struct {
 	CloudStorage CloudStorageConfig `yaml:"cloudStorage,omitempty"`
 
 	Event EventConfig
+
+	BlockFilter bool `yaml:"blockFilter,omitempty"`
 }
 
 // KernelConfig kernel config

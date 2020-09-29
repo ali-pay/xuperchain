@@ -9,9 +9,9 @@ log:
   filename: xchain
   fmt: logfmt
   # 是否打印命令行工具端口
-  console: true
+  console: false
   # 日志等级
-  level: debug
+  level: error
 
 # RPC 服务暴露的端口
 tcpServer:
@@ -64,7 +64,7 @@ kernel:
 
 # 合约通用配置
 contract:
-  enableUpgrade: false
+  enableUpgrade: true
 
 # wasm合约配置
 wasm:
@@ -131,3 +131,6 @@ event:
   enable: true
   # 每个ip的最大订阅连接数，为0的话不限连接数
   addrMaxConn: 5
+
+# 是否过滤空区块
+blockFilter: true
