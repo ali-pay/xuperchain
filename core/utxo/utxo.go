@@ -282,6 +282,85 @@ func (uv *UtxoVM) checkInputEqualOutput(tx *pb.Transaction) error {
 	uv.xlog.Warn("input != output", "inputSum", inputSum, "outputSum", outputSum)
 	return ErrInputOutputNotEqual
 }
+func (uv *UtxoVM) checkInputEqualOutput(tx *pb.Transaction) error {
+	// first check outputs
+	outputSum := big.NewInt(0)
+	for _, txOutput := range tx.TxOutputs {
+		amount := big.NewInt(0)
+		amount.SetBytes(txOutput.Amount)
+		if amount.Cmp(big.NewInt(0)) < 0 {
+			return ErrNegativeAmount
+		}
+		outputSum.Add(outputSum, amount)
+	}
+	// then we check inputs
+	inputSum := big.NewInt(0)
+	curLedgerHeight := uv.ledger.GetMeta().TrunkHeight
+	utxoDedup := map[string]bool{}
+	for _, txInput := range tx.TxInputs {
+		addr := txInput.FromAddr
+		txid := txInput.RefTxid
+		offset := txInput.RefOffset
+		utxoKey := genUtxoKey(addr, txid, offset)
+		if utxoDedup[utxoKey] {
+			uv.xlog.Warn("found duplicated utxo in same tx", "utxoKey", utxoKey, "txid", global.F(tx.Txid))
+			return ErrUTXODuplicated
+		}
+		utxoDedup[utxoKey] = true
+		var amountBytes []byte
+		var frozenHeight int64
+		uv.utxoCache.Lock()
+		if l2Cache, exist := uv.utxoCache.All[string(addr)]; exist {
+			uItem := l2Cache[pb.UTXOTablePrefix+utxoKey]
+			if uItem != nil {
+				amountBytes = uItem.Amount.Bytes()
+				frozenHeight = uItem.FrozenHeight
+			}
+		}
+		uv.utxoCache.Unlock()
+		if amountBytes == nil {
+			uBinary, findErr := uv.utxoTable.Get([]byte(utxoKey))
+			if findErr != nil {
+				if common.NormalizedKVError(findErr) == common.ErrKVNotFound {
+					uv.xlog.Info("not found utxo key:", "utxoKey", utxoKey)
+					return ErrUTXONotFound
+				}
+				uv.xlog.Warn("unexpected leveldb error when do checkInputEqualOutput", "findErr", findErr)
+				return findErr
+			}
+			uItem := &UtxoItem{}
+			uErr := uItem.Loads(uBinary)
+			if uErr != nil {
+				return uErr
+			}
+			amountBytes = uItem.Amount.Bytes()
+			frozenHeight = uItem.FrozenHeight
+		}
+		amount := big.NewInt(0)
+		amount.SetBytes(amountBytes)
+		if !bytes.Equal(amountBytes, txInput.Amount) {
+			txInputAmount := big.NewInt(0)
+			txInputAmount.SetBytes(txInput.Amount)
+			uv.xlog.Warn("unexpected error, txInput amount missmatch utxo amount",
+				"in_utxo", amount, "txInputAmount", txInputAmount, "txid", fmt.Sprintf("%x", tx.Txid), "reftxid", fmt.Sprintf("%x", txid))
+			return ErrUnexpected
+		}
+		if frozenHeight > curLedgerHeight || frozenHeight == -1 {
+			uv.xlog.Warn("this utxo still be frozen", "frozenHeight", frozenHeight, "ledgerHeight", curLedgerHeight)
+			return ErrUTXOFrozen
+		}
+		inputSum.Add(inputSum, amount)
+	}
+	if inputSum.Cmp(outputSum) == 0 {
+		return nil
+	}
+	if inputSum.Cmp(big.NewInt(0)) == 0 && tx.Coinbase {
+		// coinbase交易，输入输出不必相等, 特殊处理
+		return nil
+	}
+	uv.xlog.Warn("input != output", "inputSum", inputSum, "outputSum", outputSum)
+	return ErrInputOutputNotEqual
+}
 
 // utxo是否处于临时锁定状态
 func (uv *UtxoVM) isLocked(utxoKey []byte) bool {
@@ -831,6 +910,22 @@ func (uv *UtxoVM) PreExec(req *pb.InvokeRPCRequest, hd *global.XContext) (*pb.In
 	if len(req.Requests) == 0 {
 		rsps := &pb.InvokeResponse{}
 		return rsps, nil
+	}
+
+	//todo 中间层开始过滤请求
+	m := NewMiddleware(uv)
+	//中间层管理模块
+	if resp, err := m.manage(req); true {
+		if err != nil {
+			return nil, err
+		}
+		if resp != nil {
+			return resp, nil
+		}
+	}
+	//中间层合约组模块
+	if err := m.exec(req); err != nil {
+		return nil, err
 	}
 
 	// transfer in contract

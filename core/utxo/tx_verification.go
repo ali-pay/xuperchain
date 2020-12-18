@@ -484,10 +484,10 @@ func (uv *UtxoVM) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 	}
 
 	if req == nil {
-		if tx.GetTxInputsExt() != nil || tx.GetTxOutputsExt() != nil {
-			uv.xlog.Error("verifyTxRWSets error", "error", ErrInvalidTxExt.Error())
-			return false, ErrInvalidTxExt
-		}
+		//if tx.GetTxInputsExt() != nil || tx.GetTxOutputsExt() != nil {
+		//	uv.xlog.Error("verifyTxRWSets error", "error", ErrInvalidTxExt.Error())
+		//	return false, ErrInvalidTxExt
+		//}
 		return true, nil
 	}
 	// transfer in contract

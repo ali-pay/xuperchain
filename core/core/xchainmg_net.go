@@ -151,11 +151,11 @@ func (xm *XChainMG) ProcessTx(in *pb.TxStatus) (*pb.CommonReply, bool, error) {
 		return out, false, nil
 	}
 
-	if len(in.Tx.TxInputs) == 0 && !bc.Ledger.GetNoFee() {
-		out.Header.Error = pb.XChainErrorEnum_CONNECT_REFUSE // 拒绝
-		xm.Log.Warn("PostTx TxInputs can not be null while need utxo!", "logid", in.Header.Logid)
-		return out, false, nil
-	}
+	//if len(in.Tx.TxInputs) == 0 && !bc.Ledger.GetNoFee() {
+	//	out.Header.Error = pb.XChainErrorEnum_CONNECT_REFUSE // 拒绝
+	//	xm.Log.Warn("PostTx TxInputs can not be null while need utxo!", "logid", in.Header.Logid)
+	//	return out, false, nil
+	//}
 
 	hd := &global.XContext{Timer: global.NewXTimer()}
 

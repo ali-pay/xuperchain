@@ -9,7 +9,7 @@ log:
   filename: xchain
   fmt: logfmt
   # 是否打印命令行工具端口
-  console: false
+  console: true
   # 日志等级
   level: error
 
@@ -68,7 +68,8 @@ contract:
 
 # wasm合约配置
 wasm:
-  driver: "xvm"
+#  driver: "xvm"
+  driver: "ixvm"
   xvm:
     optLevel: 0
 
@@ -133,4 +134,5 @@ event:
   addrMaxConn: 5
 
 # 是否过滤空区块
-blockFilter: true
+#blockFilter: true
+blockFilter: false
